@@ -1,6 +1,7 @@
 import logging
-from argparse import ArgumentParser
+
 from django.core.management import BaseCommand
+
 from tins.models import Source
 
 logger = logging.getLogger(__name__)

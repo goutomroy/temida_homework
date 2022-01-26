@@ -16,13 +16,13 @@
 2. `python manage.py runserver`
 3. `python manage.py createsuperuser`
 
-### Admin 
+### Admin
 
 `http://127.0.0.1:8000/admin/`
 
 ### Available commands
 
-1. `python manage.py parse_tin --tin PL5270103824`  
+1. `python manage.py parse_tin --tin PL5270103824`
    ```text
       --tin TIN : Required, TIN/NIP to find the information.
     ```
@@ -41,5 +41,5 @@
       --document_type DOCUMENT_TYPE : Required, Document type you want to update
     ```
 
-#### Database admin 
+#### Database admin
 ![img.png](admin.png)
