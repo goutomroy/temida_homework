@@ -1,23 +1,18 @@
 import logging
-import time
 from argparse import ArgumentParser
 
-# from Screenshot import Screenshot_Clipping
 from bs4 import BeautifulSoup
 from django.conf import settings
+from django.core.management import BaseCommand
+from django.utils import timezone
 from selenium import webdriver
-from selenium.common.exceptions import (
-    TimeoutException,
-    WebDriverException,
-    NoSuchElementException,
-)
+from selenium.common.exceptions import NoSuchElementException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.firefox import GeckoDriverManager
-from django.core.management import BaseCommand
+from selenium.webdriver.support.wait import WebDriverWait
 
+from tins.models import Source
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +23,30 @@ class Command(BaseCommand):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._data_table_map = {
+            "Dłużnik": "company",
+            "Nip": "tin",
+            "Kwota zadłużenia": "total_amount",
+            "Adres": "address",
+            "Rodzaj/typ dokumentu stanowiący podstawę dla wierzytelności": "document_type",  # noqa
+            "Numer": "number_id",
+            "Cena zadłużenia": "sell_for",
+        }
+        self._start_ts = timezone.now()
         self._init_firefox_driver()
 
     def add_arguments(self, parser: ArgumentParser):
-        parser.add_argument("--tin", type=str, default=None)
+        parser.add_argument(
+            "--tin", type=str, required=True, help="TIN/NIP to find the information."
+        )
 
     def handle(self, *args, **options):
         tin: str = options["tin"]
 
         try:
             self._load_initial_page()
-            # self._save_screenshot("s_load_initial_page.png")
-
             self._search_by_tin(tin)
-            # self._save_screenshot("s_after_search_by_tin.png")
-
-            self._click_to_more()
-            # self._save_screenshot("s_after_click_to_more.png")
             self._parse_information(tin)
-
         except WebDriverException as e:
             raise e
         finally:
@@ -120,48 +120,65 @@ class Command(BaseCommand):
         search_box.send_keys(tin)
         search_click_button.click()
 
-    def _click_to_more(self):
-        self._wait_for_loader_to_be_finished()
+    def _parse_information(self, tin: str):
+        try:
+            self._wait_for_loader_to_be_finished()
+            self._driver.find_element(By.CLASS_NAME, "ki-market-case")
+            self._parse_and_save_success_information()
+        except NoSuchElementException:
+            logger.info(f"TIN: {tin} Not Found")
+
+    def _parse_and_save_success_information(self):
+
         more_button = self._web_driver_wait.until(
             EC.visibility_of_element_located((By.CLASS_NAME, "ki-market-case"))
         )
         more_button.click()
 
-    def _parse_information(self, tin: str):
-        try:
-            self._driver.find_element(
-                By.CLASS_NAME, "ki-market-message"
-            )
-            logger.info(f"TIN: {tin} Not Found")
-        except NoSuchElementException:
-            self._parse_success_information()
-
-    def _parse_success_information(self):
+        data = dict()
         soup = BeautifulSoup(self._driver.page_source, "lxml")
+        root_tag = soup.find("div", class_="ki-market-case ki-market-case--expanded")
 
-    def _save_screenshot(self, file_name):
-        self._driver.save_screenshot(file_name)
+        for child in root_tag.children:
+            if child["class"] == ["ki-market-case-header"]:
+                for idx, nested_child in enumerate(child.children):
+                    if idx < 3:
+                        data[
+                            nested_child.span.get_text().strip()
+                        ] = nested_child.get_text().strip()
+
+            elif child["class"] == ["ki-market-case-details"]:
+                for idx, nested_child in enumerate(child.children):
+                    if idx < 2:
+                        if idx == 0:
+                            for idx_1, last_nested_child in enumerate(
+                                nested_child.children
+                            ):
+                                if idx_1 == 0:
+                                    data[
+                                        last_nested_child.span.get_text().strip()
+                                    ] = last_nested_child.div.get_text().strip()
+                                else:
+                                    data[
+                                        last_nested_child.span.get_text().strip()
+                                    ] = last_nested_child.get_text().strip()
+
+                        elif idx == 1:
+                            data[
+                                nested_child.div.span.get_text().strip()
+                            ] = nested_child.div.get_text().strip()
+
+        self._save_data(data)
+
+    def _save_data(self, data: dict):
+        data_to_save = dict()
+        for key, value in data.items():
+            if key in self._data_table_map:
+                data_to_save[self._data_table_map[key]] = value
+
+        data_to_save["parsing_start_ts"] = self._start_ts
+        data_to_save["parsing_end_ts"] = timezone.now()
+        Source.objects.create(**data_to_save)
 
     def _quit_driver(self):
         self._driver.quit()
-
-    # def _remove_accept_cookie(self):
-    #     self._remove_element_by_class_name_from_driver("wh-cookieInfoBox")
-    #
-    # def _remove_element_by_class_name_from_driver(self, class_name: str):
-    #     self._web_driver_wait.until(
-    #         EC.visibility_of_element_located((By.CLASS_NAME, class_name))
-    #     )
-    #
-    #     js = (
-    #         """
-    #         var element = document.querySelector("""
-    #         + "'."
-    #         + class_name
-    #         + "'"
-    #         + """);
-    #         if (element)
-    #             element.remove();
-    #         """
-    #     )
-    #     self._driver.execute_script(js)
