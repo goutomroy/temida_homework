@@ -11,10 +11,12 @@
 
 
 ### Running the server
-
-1. `python manage.py migrate`
-2. `python manage.py runserver`
-3. `python manage.py createsuperuser`
+1. I guess you have installed `python3.9` in your machine.
+2. Download and extract the sourcecode and enter to the folder. Then do the following steps.
+3. `pip install -r requirements.txt`
+4. `python manage.py migrate`
+5. `python manage.py runserver`
+6. `python manage.py createsuperuser`
 
 ### Admin
 
