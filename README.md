@@ -9,6 +9,19 @@
      - Update column updated_at in tins
      - Parse info and save
 
+* What is the difference between PL5270103824 and Nip5270103824? -
+you need to parse only digits via regex, so, you can set any NIPSSTEST5270103824 -
+and system can use only digits for script. But in DB you need to save original NIP.
+
+* Can you please tell me more about is_exist, start_ts, parsing_ts? - 1110101111 - is_exist = False,
+start_ts = NAJSTARSZA DATA WYMAGALNOŚCI W SPRAWIE from site, parsing_ts = current time when parser working. now()
+
+* Why is the 2nd tins table needed? we can add updated_at field to Source table,
+is it fine? - we need the second tins table for bulk version.
+Example, when we set some nip in this table 100-200. Parser should have command
+to run bulk. they get for example first 10 records, and try parse it,
+then updated_at update for current time and in next time we can order it with column update_at
+
 
 ### Running the server
 1. I guess you have installed `python3.9` in your machine.
@@ -28,15 +41,19 @@
    ```text
       --tin TIN : Required, TIN/NIP to find the information.
     ```
-2. `python manage.py get_tin_from_db --tin Nip5270103824`
+2. `python manage.py parse_bulk_tins --num_of_records 10`
+   ```text
+      --num_of_records  : Not Required, Default is 5, Number of records parsed from Tin to parse in bulk.
+    ```
+3. `python manage.py get_tin_from_db --tin Nip5270103824`
    ```text
       --tin TIN : Required, TIN/NIP to find the information.
     ```
-3. `python manage.py get_all_tins_from_db`
+4. `python manage.py get_all_tins_from_db`
     ```text
       --tin TIN : Required, TIN/NIP to find the information.
     ```
-4. `python manage.py update_tin --tin Nip5270103824 --sell_for '50000 PLN' --document_type 'Rodzaj/typ dokumentu'`
+5. `python manage.py update_tin --tin Nip5270103824 --sell_for '50000 PLN' --document_type 'Rodzaj/typ dokumentu'`
     ```text
       --tin TIN : Required, TIN/NIP to find the information.
       --sell_for SELL_FOR : Required, Sell information you want to update

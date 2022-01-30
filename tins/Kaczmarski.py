@@ -1,4 +1,5 @@
 import logging
+import re
 
 from bs4 import BeautifulSoup
 from django.conf import settings
@@ -10,38 +11,54 @@ from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
-from tins.models import Source
+from tins.models import Source, validate_tin
 
 logger = logging.getLogger(__name__)
+
+
+class GetTextExtractor:
+    def __init__(self, element):
+        key_value_list = element.get_text("--", strip=True).split("--")
+        self.key = key_value_list[0]
+        self.value = key_value_list[1]
 
 
 class Kaczmarski:
 
     URL_TO_PARSE = "https://kaczmarski.pl/gielda-wierzytelnosci"
+    DATA_TABLE_MAP = {
+        "Dłużnik": "company",
+        "Nip": "tin",
+        "Kwota zadłużenia": "total_amount",
+        "Adres": "address",
+        "Rodzaj/typ dokumentu stanowiący podstawę dla wierzytelności": "document_type",  # noqa
+        "Najstarsza data wymagalności w sprawie": "start_ts",
+        "Numer": "number_id",
+        "Cena zadłużenia": "sell_for",
+    }
 
-    def __init__(self):
-        self._data_table_map = {
-            "Dłużnik": "company",
-            "Nip": "tin",
-            "Kwota zadłużenia": "total_amount",
-            "Adres": "address",
-            "Rodzaj/typ dokumentu stanowiący podstawę dla wierzytelności": "document_type",  # noqa
-            "Numer": "number_id",
-            "Cena zadłużenia": "sell_for",
-        }
-        self._start_ts = timezone.now()
+    def __init__(self, tin):
+        self.original_tin = tin
+        self.tin = self._validate_and_extract_tin(tin)
+        self._parsing_ts = timezone.now()
+
         self._init_firefox_driver()
 
-    def parse_tin(self, tin):
-        self.tin = tin
+    def _validate_and_extract_tin(self, tin):
+        validate_tin(tin)
+        return re.findall("[0-9]{5,10}", tin)[0]
+
+    def parse_tin(self):
+        raw_parsed_data = None
         try:
             self._load_initial_page()
-            self._search_by_tin(self.tin)
-            self._parse_information(self.tin)
+            self._search_by_tin()
+            raw_parsed_data = self._parse_information()
         except WebDriverException as e:
             raise e
         finally:
             self._quit_driver()
+            return raw_parsed_data
 
     def _init_firefox_driver(self):
         options = Options()
@@ -54,7 +71,7 @@ class Kaczmarski:
         fp.set_preference("network.http.use-cache", True)
         fp.update_preferences()
 
-        path_to_driver = settings.BASE_DIR / "tins/geckodriver"
+        path_to_driver = settings.BASE_DIR / "tins" / "geckodriver"
         self._driver = webdriver.Firefox(
             executable_path=path_to_driver, options=options, firefox_profile=fp
         )
@@ -95,7 +112,7 @@ class Kaczmarski:
         except NoSuchElementException:
             pass
 
-    def _search_by_tin(self, tin: str):
+    def _search_by_tin(self):
         self._close_overlays_if_exists()
         self._wait_for_loader_to_be_finished()
 
@@ -108,23 +125,25 @@ class Kaczmarski:
         )
 
         search_box.clear()
-        search_box.send_keys(tin)
+        search_box.send_keys(self.tin)
         search_click_button.click()
 
-    def _parse_information(self, tin: str):
+    def _parse_information(self):
         try:
             self._wait_for_loader_to_be_finished()
             self._driver.find_element(By.CLASS_NAME, "ki-market-case")
-            self._parse_and_save_success_information()
+            return self._parse_success_information()
         except NoSuchElementException:
-            logger.info(f"TIN: {tin} Not Found")
+            return {"detail": f"TIN: {self.tin} Not Found"}
 
-    def _parse_and_save_success_information(self):
-
+    def _expand_more(self):
         more_button = self._web_driver_wait.until(
             EC.visibility_of_element_located((By.CLASS_NAME, "ki-market-case"))
         )
         more_button.click()
+
+    def _parse_success_information(self):
+        self._expand_more()
 
         data = dict()
         soup = BeautifulSoup(self._driver.page_source, "lxml")
@@ -134,9 +153,8 @@ class Kaczmarski:
             if child["class"] == ["ki-market-case-header"]:
                 for idx, nested_child in enumerate(child.children):
                     if idx < 3:
-                        data[
-                            nested_child.span.get_text().strip()
-                        ] = nested_child.get_text().strip()
+                        text_extractor = GetTextExtractor(nested_child)
+                        data[text_extractor.key] = text_extractor.value
 
             elif child["class"] == ["ki-market-case-details"]:
                 for idx, nested_child in enumerate(child.children):
@@ -145,35 +163,29 @@ class Kaczmarski:
                             for idx_1, last_nested_child in enumerate(
                                 nested_child.children
                             ):
-                                if idx_1 == 0:
-                                    data[
-                                        last_nested_child.span.get_text().strip()
-                                    ] = last_nested_child.div.get_text().strip()
-                                else:
-                                    data[
-                                        last_nested_child.span.get_text().strip()
-                                    ] = last_nested_child.get_text().strip()
+                                text_extractor = GetTextExtractor(last_nested_child)
+                                data[text_extractor.key] = text_extractor.value
 
                         elif idx == 1:
-                            data[
-                                nested_child.div.span.get_text().strip()
-                            ] = nested_child.div.get_text().strip()
+                            text_extractor = GetTextExtractor(nested_child)
+                            data[text_extractor.key] = text_extractor.value
 
-        self._save_data(data)
+        self._save_to_db(data)
+        return data
 
-    def _save_data(self, data: dict):
+    def _save_to_db(self, data: dict):
         data_to_save = dict()
         for key, value in data.items():
-            if key in self._data_table_map:
-                data_to_save[self._data_table_map[key]] = value
+            if key in self.DATA_TABLE_MAP:
+                data_to_save[self.DATA_TABLE_MAP[key]] = value
 
-        data_to_save["parsing_start_ts"] = self._start_ts
-        data_to_save["parsing_end_ts"] = timezone.now()
+        data_to_save["tin"] = self.original_tin
+        data_to_save["parsing_ts"] = self._parsing_ts
+        data_to_save["start_ts"] = timezone.datetime.strptime(
+            data_to_save["start_ts"], "%d-%m-%Y"
+        ).strftime("%Y-%m-%d")
 
-        if not Source.objects.filter(tin=data_to_save["tin"]).exists():
-            Source.objects.create(**data_to_save)
-
-        logger.info("Success")
+        Source.objects.update_or_create(data_to_save, tin=data_to_save["tin"])
 
     def _quit_driver(self):
         self._driver.quit()

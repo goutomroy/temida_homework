@@ -1,0 +1,45 @@
+version: '3.5'
+
+services:
+
+  redis:
+    image: redis:6.2.4
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - /var/temida_homework/redis-data:/data
+    networks:
+      - temida_homework
+
+  web:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    networks:
+      - temida_homework
+    command: >
+      sh -c "python3 manage.py migrate &&
+             python3 manage.py runserver 0.0.0.0:8000"
+
+  celery:
+    restart: always
+    build:
+      context: .
+    command: celery -A temida_homework.celery_app worker --loglevel=info
+    depends_on:
+      - web
+      - redis
+    networks:
+      - temida_homework
+
+networks:
+  temida_homework:
+    external: false
+    name: temida_homework
+
+volumes:
+  redis-data:
