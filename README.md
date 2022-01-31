@@ -9,20 +9,6 @@
      - Update column updated_at in tins
      - Parse info and save
 
-* What is the difference between PL5270103824 and Nip5270103824? -
-you need to parse only digits via regex, so, you can set any NIPSSTEST5270103824 -
-and system can use only digits for script. But in DB you need to save original NIP.
-
-* Can you please tell me more about is_exist, start_ts, parsing_ts? - 1110101111 - is_exist = False,
-start_ts = NAJSTARSZA DATA WYMAGALNOŚCI W SPRAWIE from site, parsing_ts = current time when parser working. now()
-
-* Why is the 2nd tins table needed? we can add updated_at field to Source table,
-is it fine? - we need the second tins table for bulk version.
-Example, when we set some nip in this table 100-200. Parser should have command
-to run bulk. they get for example first 10 records, and try parse it,
-then updated_at update for current time and in next time we can order it with column update_at
-
-
 ### Running the server
 1. I guess you have installed `python3.9`, `docker`, `docker-compose` in your machine.
 2. Download and extract the sourcecode and enter to the folder. Then do the following steps.
@@ -31,6 +17,9 @@ then updated_at update for current time and in next time we can order it with co
 5. `python manage.py migrate`
 6. `python manage.py runserver`
 7. `python manage.py createsuperuser`
+
+### Run Celery server
+`celery -A temida_homework worker --loglevel=info`
 
 ### Admin
 
