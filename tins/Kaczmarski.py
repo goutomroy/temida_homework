@@ -66,7 +66,6 @@ class Kaczmarski:
     def _init_firefox_driver(self):
         options = Options()
         options.headless = True
-        # options.binary_location = "/opt/firefox/firefox"
 
         fp = webdriver.FirefoxProfile()
         fp.set_preference("browser.cache.disk.enable", True)
@@ -74,15 +73,11 @@ class Kaczmarski:
         fp.set_preference("browser.cache.offline.enable", False)
         fp.set_preference("network.http.use-cache", True)
         fp.update_preferences()
-        options.profile=fp
 
-        # python manage.py parse_bulk_tins
-        # path_to_driver = settings.BASE_DIR / "tins" / "geckodriver"
-        # self._driver = webdriver.Firefox(executable_path=r'./firefox-geckodriver.deb', options=options, firefox_profile=fp)
-        # service = Service()
-        # service = Service(executable_path=GeckoDriverManager().install())
-        # service = Service(executable_path=GeckoDriverManager().install())
-        self._driver = webdriver.Firefox(options=options, firefox_binary=FirefoxBinary('/opt/firefox/firefox'), executable_path="/usr/bin/geckodriver")
+        path_to_driver = settings.BASE_DIR / "tins" / "geckodriver"
+        self._driver = webdriver.Firefox(
+            executable_path=path_to_driver, options=options, firefox_profile=fp
+        )
         self._driver.maximize_window()
         self._web_driver_wait = WebDriverWait(self._driver, 10)
 

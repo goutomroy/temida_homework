@@ -9,7 +9,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "temida_homework.settings")
 
 
 class Config:
-    broker_url = "redis://redis/0"
+    broker_url = "redis://127.0.0.1:6379/0"
     result_backend = "django-db"
     beat_max_loop_interval = 600
     result_cache_max = 1000

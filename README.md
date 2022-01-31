@@ -24,16 +24,19 @@ then updated_at update for current time and in next time we can order it with co
 
 
 ### Running the server
-1. I guess you have installed `python3.9` in your machine.
+1. I guess you have installed `python3.9`, `docker`, `docker-compose` in your machine.
 2. Download and extract the sourcecode and enter to the folder. Then do the following steps.
 3. `pip install -r requirements.txt`
-4. `python manage.py migrate`
-5. `python manage.py runserver`
-6. `python manage.py createsuperuser`
+4. `docker-compose up -d`
+5. `python manage.py migrate`
+6. `python manage.py runserver`
+7. `python manage.py createsuperuser`
 
 ### Admin
 
 `http://127.0.0.1:8000/admin/`
+username : kamil
+password: kamilkamil123
 
 ### Available commands
 
