@@ -19,19 +19,35 @@ services:
       - "8000:8000"
     depends_on:
       - redis
+      - postgres
     networks:
       - temida_homework
     command: >
       sh -c "python3 manage.py migrate &&
              python3 manage.py runserver 0.0.0.0:8000"
 
+  postgres:
+    image: postgis/postgis:14-master
+    container_name: temida_homework_postgres
+    ports:
+      - "5433:5432"
+    volumes:
+    - /var/temida_homework/database-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "temida_homework"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+    networks:
+      - temida_homework
+
+
   celery:
     restart: always
     build:
       context: .
-    command: celery -A temida_homework.celery_app worker --loglevel=info
+    command: celery -A temida_homework worker --loglevel=info
     depends_on:
-      - web
+      - postgres
       - redis
     networks:
       - temida_homework
@@ -43,3 +59,4 @@ networks:
 
 volumes:
   redis-data:
+  database-data:

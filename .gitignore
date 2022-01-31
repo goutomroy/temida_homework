@@ -128,7 +128,7 @@ src/
 postgres-data/
 
 # sqlite
-*.sqlite3
+#*.sqlite3
 
 # CSS
 *.css.map
